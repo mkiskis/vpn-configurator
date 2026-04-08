@@ -27,8 +27,8 @@ excluded_routes:
 user: nobody
 group: nogroup
 
-# Keep CA pinning enabled unless you are intentionally testing an unpinned provider.
-verify_ca_fingerprint: true
+# Disabled by default because provider CA rotation is handled by the fetched provider CA itself.
+verify_ca_fingerprint: false
 
 # Optional endpoint overrides for custom Bitmask-compatible providers.
 # api_uri: https://api.example.net:4430

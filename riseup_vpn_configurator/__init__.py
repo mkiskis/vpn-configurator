@@ -55,6 +55,14 @@ DEFAULT_OPENVPN_CONFIG_DIR = Path("/etc/openvpn/client")
 DEFAULT_CONFIG_TIMEOUT = 10
 CONFIG_FILE = Path("/etc/riseup-vpn.yaml")
 DEFAULT_CONFIG_TEMPLATE = Path(__file__).parent / "riseup-vpn.yaml"
+PRIVATE_KEY_PATTERN = re.compile(
+    r"-----BEGIN (?:RSA )?PRIVATE KEY-----.*?-----END (?:RSA )?PRIVATE KEY-----",
+    re.S,
+)
+CERTIFICATE_PATTERN = re.compile(
+    r"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----",
+    re.S,
+)
 SAFE_OPENVPN_KEYS = {
     "auth",
     "cipher",
@@ -227,7 +235,7 @@ def read_config() -> dict[str, Any]:
     config.setdefault("request_timeout", DEFAULT_CONFIG_TIMEOUT)
     config.setdefault("state_dir", str(DEFAULT_STATE_DIR))
     config.setdefault("openvpn_config_dir", str(DEFAULT_OPENVPN_CONFIG_DIR))
-    config.setdefault("verify_ca_fingerprint", True)
+    config.setdefault("verify_ca_fingerprint", False)
     config.setdefault("user", get_default_openvpn_user())
     config.setdefault("group", get_no_group_name())
     config.setdefault("service_name", config["provider"])
@@ -276,6 +284,7 @@ def get_runtime_paths(config: dict[str, Any]) -> dict[str, Path]:
         "provider_json": state_dir / "provider.json",
         "gateway_json": state_dir / "gateways.json",
         "ca_cert_file": state_dir / "vpn-ca.pem",
+        "client_bundle_file": state_dir / "client.pem",
         "cert_file": state_dir / "cert.pem",
         "key_file": state_dir / "key.pem",
         "ovpn_file": openvpn_dir / f"{service_name}.conf",
@@ -486,21 +495,16 @@ def update_vpn_ca_certificate(config: dict[str, Any], provider: dict[str, Any], 
 
 
 def split_credentials_bundle(bundle_text: str) -> tuple[str, str]:
-    separator = "-----BEGIN CERTIFICATE-----"
-    parts = bundle_text.split(separator, 1)
-    if len(parts) != 2:
+    key_match = PRIVATE_KEY_PATTERN.search(bundle_text)
+    certificate_matches = CERTIFICATE_PATTERN.findall(bundle_text)
+
+    if key_match is None:
+        raise ValueError(f"Private key could not be found:\n{bundle_text}")
+    if not certificate_matches:
         raise ValueError(f"Certificate could not be found:\n{bundle_text}")
 
-    key = parts[0].strip()
-    cert = f"{separator}{parts[1]}".strip()
-
-    if "-----BEGIN RSA PRIVATE KEY-----" not in key and "-----BEGIN PRIVATE KEY-----" not in key:
-        raise ValueError(f"Private key could not be found:\n{bundle_text}")
-    if "-----END PRIVATE KEY-----" not in key and "-----END RSA PRIVATE KEY-----" not in key:
-        raise ValueError(f"Private key could not be found:\n{bundle_text}")
-    if "-----BEGIN CERTIFICATE-----" not in cert or "-----END CERTIFICATE-----" not in cert:
-        raise ValueError(f"Certificate could not be found:\n{bundle_text}")
-
+    key = key_match.group(0).strip()
+    cert = "\n".join(certificate.strip() for certificate in certificate_matches)
     return key, cert
 
 
@@ -516,6 +520,9 @@ def update_vpn_client_credentials(config: dict[str, Any], provider: dict[str, An
     except (requests.RequestException, ValueError) as exc:
         logging.error(exc)
         sys.exit(1)
+
+    atomic_write_text(paths["client_bundle_file"], payload.strip() + "\n")
+    logging.info(f"Successfully saved combined VPN client bundle to {paths['client_bundle_file']}")
 
     atomic_write_text(paths["key_file"], key + "\n")
     logging.info(f"Successfully saved VPN client key to {paths['key_file']}")
@@ -722,8 +729,8 @@ def build_openvpn_config(config: dict[str, Any], paths: dict[str, Path], server_
         [
             "",
             f"ca {paths['ca_cert_file']}",
-            f"cert {paths['cert_file']}",
-            f"key {paths['key_file']}",
+            f"cert {paths['client_bundle_file']}",
+            f"key {paths['client_bundle_file']}",
         ]
     )
 
@@ -741,7 +748,7 @@ def build_openvpn_config(config: dict[str, Any], paths: dict[str, Path], server_
 
 
 def generate_configuration(config: dict[str, Any], paths: dict[str, Path]) -> None:
-    for path in (paths["ca_cert_file"], paths["cert_file"], paths["key_file"]):
+    for path in (paths["ca_cert_file"], paths["client_bundle_file"]):
         if not path.exists():
             logging.error(f"File ({path}) not found. You can get it by using --update")
             sys.exit(1)
@@ -780,6 +787,11 @@ def show_status(config: dict[str, Any], provider: dict[str, Any], paths: dict[st
         logging.info("Client key: OK")
     else:
         logging.warning("Client key not found. You can get it with --update")
+
+    if paths["client_bundle_file"].exists():
+        logging.info("Combined client PEM bundle: OK")
+    else:
+        logging.warning("Combined client PEM bundle not found. You can get it with --update")
 
     if not paths["cert_file"].exists():
         logging.warning("Client certificate not found. You can get it with --update")

@@ -1,6 +1,6 @@
-[![tests](https://github.com/kmille/riseup-vpn-configurator/actions/workflows/tests.yaml/badge.svg?branch=main)](https://github.com/kmille/riseup-vpn-configurator/actions/workflows/tests.yaml)
-![license](https://img.shields.io/github/license/kmille/riseup-vpn-configurator?color=green)
-![latest tag](https://img.shields.io/github/v/tag/kmille/riseup-vpn-configurator?sort=semver)
+[![tests](https://github.com/mkiskis/vpn-configurator/actions/workflows/tests.yaml/badge.svg?branch=main)](https://github.com/mkiskis/vpn-configurator/actions/workflows/tests.yaml)
+![license](https://img.shields.io/github/license/mkiskis/vpn-configurator?color=green)
+![latest tag](https://img.shields.io/github/v/tag/mkiskis/vpn-configurator?sort=semver)
 
 # riseup-vpn-configurator
 
@@ -11,7 +11,7 @@ It keeps the original CLI-driven workflow, but adds:
 - built-in support for the known Bitmask providers: `riseup`, `calyx`, and `demo`
 - manual gateway selection across provider inventories
 - live `reload` and `rotate` commands for running `openvpn-client@<service>`
-- pinned CA handling and provider-specific API verification
+- optional CA pinning and provider-specific API verification
 - safer defaults for runtime state and generated file permissions
 
 ## What it manages
@@ -32,7 +32,7 @@ sudo pip install riseup-vpn-configurator
 Or for development:
 
 ```bash
-git clone https://github.com/kmille/riseup-vpn-configurator.git
+git clone https://github.com/mkiskis/vpn-configurator.git
 cd riseup-vpn-configurator
 sudo poetry install
 sudo poetry run riseup-vpn-configurator --help
@@ -88,7 +88,7 @@ excluded_routes:
   - 192.168.123.0/24
 user: nobody
 group: nogroup
-verify_ca_fingerprint: true
+verify_ca_fingerprint: false
 extra_config: |
   # empty extra_config
 ```
@@ -110,8 +110,9 @@ ca_cert_fingerprint: SHA256: ...
 
 ## Security and ops notes
 
-- CA certificates are pinned when a built-in provider fingerprint is known.
+- CA fingerprint verification is disabled by default, but can be re-enabled per config.
 - Gateway and client credential API calls are verified against the fetched provider CA, which helps with private provider PKI setups.
+- The `/3/cert` response is preserved as a combined PEM bundle and used directly for OpenVPN `cert` and `key`.
 - Generated certs, keys, and OpenVPN config files are written atomically with restrictive permissions.
 - `--reload` uses `systemctl reload-or-restart`, so config changes can be applied to a running VPN unit without a separate manual restart step.
 - Client certificates are short-lived by design; this tool does not try to keep long-lived persistent sessions alive forever.

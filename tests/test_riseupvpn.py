@@ -98,7 +98,7 @@ def make_config(tmp_path: Path) -> dict:
         "group": "root",
         "state_dir": str(tmp_path / "state"),
         "openvpn_config_dir": str(tmp_path / "openvpn"),
-        "verify_ca_fingerprint": True,
+        "verify_ca_fingerprint": False,
         "request_timeout": 5,
         "extra_config": "mute 3",
     }
@@ -107,6 +107,7 @@ def make_config(tmp_path: Path) -> dict:
 def write_runtime_files(paths: dict[str, Path]) -> None:
     paths["state_dir"].mkdir(parents=True, exist_ok=True)
     paths["ca_cert_file"].write_text(TEST_CA_CERT, encoding="utf-8")
+    paths["client_bundle_file"].write_text(TEST_KEY + "\n" + TEST_CERT, encoding="utf-8")
     paths["cert_file"].write_text(TEST_CERT, encoding="utf-8")
     paths["key_file"].write_text(TEST_KEY, encoding="utf-8")
     paths["gateway_json"].write_text(json.dumps(make_gateway_inventory()), encoding="utf-8")
@@ -133,6 +134,7 @@ def test_read_config_normalizes_provider_alias(tmp_path: Path, monkeypatch: pyte
 
     assert config["provider"] == "riseup"
     assert config["service_name"] == "riseup"
+    assert config["verify_ca_fingerprint"] is False
 
 
 def test_list_providers_includes_all_builtin_providers(capsys: pytest.CaptureFixture[str]) -> None:
@@ -198,6 +200,31 @@ def test_update_gateways_uses_provider_ca_for_tls_verification(
     assert calls[0][2] == str(paths["ca_cert_file"])
 
 
+def test_update_vpn_client_credentials_saves_combined_bundle(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = make_config(tmp_path)
+    provider = rvc.resolve_provider(config)
+    paths = rvc.ensure_runtime_directories(config)
+    paths["ca_cert_file"].write_text(TEST_CA_CERT, encoding="utf-8")
+    bundle = TEST_KEY + "\n" + TEST_CERT
+
+    def fake_get(url: str, timeout: float, verify=True):
+        return SimpleNamespace(
+            text=bundle,
+            raise_for_status=lambda: None,
+        )
+
+    monkeypatch.setattr(rvc.requests, "get", fake_get)
+
+    rvc.update_vpn_client_credentials(config, provider, paths)
+
+    assert paths["client_bundle_file"].read_text(encoding="utf-8").startswith("-----BEGIN RSA PRIVATE KEY-----")
+    assert paths["key_file"].read_text(encoding="utf-8").startswith("-----BEGIN RSA PRIVATE KEY-----")
+    assert paths["cert_file"].read_text(encoding="utf-8").startswith("-----BEGIN CERTIFICATE-----")
+
+
 def test_generate_configuration_uses_provider_options_and_skips_unsafe_keys(tmp_path: Path) -> None:
     config = make_config(tmp_path)
     paths = rvc.ensure_runtime_directories(config)
@@ -212,6 +239,8 @@ def test_generate_configuration_uses_provider_options_and_skips_unsafe_keys(tmp_
     assert "cipher AES-256-GCM" in vpn_config
     assert "data-ciphers AES-256-GCM" in vpn_config
     assert "auth-nocache" in vpn_config
+    assert f"cert {paths['client_bundle_file']}" in vpn_config
+    assert f"key {paths['client_bundle_file']}" in vpn_config
     assert "route 8.8.8.8 255.255.255.255 net_gateway" in vpn_config
     assert "route 192.168.123.0 255.255.255.0 net_gateway" in vpn_config
     assert "script-security" not in vpn_config

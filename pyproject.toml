@@ -6,8 +6,8 @@ authors = ["kmille <github@androidloves.me>"]
 readme = "README.md"
 packages = [{include = "riseup_vpn_configurator"}]
 license = "GPL-3.0-only"
-repository = "https://github.com/kmille/riseup-vpn-configurator"
-homepage = "https://github.com/kmille/riseup-vpn-configurator"
+repository = "https://github.com/mkiskis/vpn-configurator"
+homepage = "https://github.com/mkiskis/vpn-configurator"
 
 
 [tool.poetry.dependencies]
