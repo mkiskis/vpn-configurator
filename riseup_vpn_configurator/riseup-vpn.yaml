@@ -1,22 +1,43 @@
 ---
 # /etc/riseup-vpn.yaml
 
+# Built-in providers: riseup, calyx, demo
+provider: riseup
+
+# service_name controls the generated OpenVPN client unit name:
+# /etc/openvpn/client/<service_name>.conf -> openvpn-client@<service_name>
+service_name: riseup
+
 server: vpn07-par.riseup.net
 protocol: udp
 port: 53
 
-# excluded_routes: list servcies that should not be routed over VPN
-# can be an ipaddress, network or hostname
-# your local subnet is excluded by default
+# state_dir stores the fetched CA certificate, client certificate/key, and gateway cache.
+state_dir: /var/lib/riseup-vpn-configurator
+
+# excluded_routes: services that should not be routed over VPN
+# can be an ipaddress, network, or hostname
+# your local subnet is excluded by default only if you add it here
 excluded_routes:
   - 8.8.8.8
   - 192.168.123.0/24
   - us02web.zoom.us
 
-# os user/group
-user: openvpn
-group: openvpn
+# OpenVPN runtime user/group. Adjust if your distro uses a different account.
+user: nobody
+group: nogroup
+
+# Keep CA pinning enabled unless you are intentionally testing an unpinned provider.
+verify_ca_fingerprint: true
+
+# Optional endpoint overrides for custom Bitmask-compatible providers.
+# api_uri: https://api.example.net:4430
+# vpn_api_version: 3
+# gateway_api_url: https://api.example.net:4430/3/config/eip-service.json
+# client_credentials_url: https://api.example.net:4430/3/cert
+# ca_cert_url: https://example.net/ca.crt
+# ca_cert_fingerprint: SHA256: ...
 
 # add custom config
 extra_config: |
-  # emtpy extra_config
+  # empty extra_config

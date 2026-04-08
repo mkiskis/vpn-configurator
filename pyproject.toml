@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "riseup-vpn-configurator"
 version = "1.3.0"
-description = "a simple command line tool to get RiseupVPN up and running"
+description = "a Bitmask-compatible OpenVPN configurator for Riseup and other known providers"
 authors = ["kmille <github@androidloves.me>"]
 readme = "README.md"
 packages = [{include = "riseup_vpn_configurator"}]
@@ -41,7 +41,7 @@ build-backend = "poetry.core.masonry.api"
 riseup-vpn-configurator = 'riseup_vpn_configurator.__init__:main'
 
 [tool.setuptools.package-data]
-riseup_vpn_configurator = ["riseup_vpn_configurator/riseup-vpn.yaml"]
+riseup_vpn_configurator = ["riseup-vpn.yaml"]
 
 [tool.mypy]
 ignore_missing_imports = true
